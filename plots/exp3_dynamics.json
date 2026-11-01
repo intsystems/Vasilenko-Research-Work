@@ -1,0 +1,413 @@
+{
+  "experiment": "finite_horizon_residuals",
+  "environment": {
+    "python": "3.13.7",
+    "torch": "2.14.1+cpu",
+    "numpy": "2.5.2",
+    "matplotlib": "3.11.2",
+    "device": "cpu",
+    "torch_threads": 1
+  },
+  "config": {
+    "seeds": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "rng_streams": [
+      {
+        "seed": 0,
+        "model": 0,
+        "synthetic_inputs": 1,
+        "projection": 2
+      },
+      {
+        "seed": 1,
+        "model": 3,
+        "synthetic_inputs": 4,
+        "projection": 5
+      },
+      {
+        "seed": 2,
+        "model": 6,
+        "synthetic_inputs": 7,
+        "projection": 8
+      },
+      {
+        "seed": 3,
+        "model": 9,
+        "synthetic_inputs": 10,
+        "projection": 11
+      },
+      {
+        "seed": 4,
+        "model": 12,
+        "synthetic_inputs": 13,
+        "projection": 14
+      }
+    ],
+    "synthetic_samples_per_seed": 5,
+    "nu_values": [
+      0.1,
+      0.5,
+      1.0
+    ],
+    "steps": 1000,
+    "S": 32,
+    "D": 64,
+    "H": 4,
+    "D_ff": 128,
+    "context": "C = 0.1 * initial_state; fixed along each trajectory",
+    "synthetic_distribution": "N(0,I)",
+    "weights": "Untrained; identical block weights across datasets for each seed",
+    "dtype": "torch.float32",
+    "threads": 1,
+    "synthetic_only": false
+  },
+  "cifar10": {
+    "dataset": "CIFAR-10",
+    "split": "test",
+    "data_dir": "/home/dimundel/Jacobian-Analysis-of-a-Recurrent-Transformer-Block/data",
+    "indices": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "labels": [
+      3,
+      8,
+      8,
+      0,
+      6
+    ],
+    "torchvision_version": "0.29.1+cpu",
+    "preprocessing": "RGB pixels mapped to [-1, 1]; one image row per token",
+    "sequence_shape": [
+      5,
+      32,
+      96
+    ],
+    "image_standard_deviations": [
+      0.3658984899520874,
+      0.6161967515945435,
+      0.514098048210144,
+      0.44243913888931274,
+      0.3277508020401001
+    ],
+    "additional_preprocessing": "Divide each image by its sample standard deviation (correction=1), then apply a shared random, untrained Linear(96,64) projection per seed"
+  },
+  "residual_axes": [
+    "seed",
+    "nu",
+    "sample",
+    "step"
+  ],
+  "initial_state_axes": [
+    "seed",
+    "sample",
+    "token",
+    "feature"
+  ],
+  "criterion": {
+    "metric": "Absolute Frobenius norm per sample: ||Y(t+1)-Y(t)||_F",
+    "tolerance": 0.0001,
+    "tail_steps": 20,
+    "rule": "All residuals in the final tail_steps are <= tolerance",
+    "scope": "Finite-horizon observations; no guarantee of convergence or contraction"
+  },
+  "plot": {
+    "center": "median",
+    "band": "minimum to maximum, not a confidence interval",
+    "log_display_floor": 1e-12
+  },
+  "summary": {
+    "synthetic": [
+      {
+        "nu": 0.1,
+        "trials": 25,
+        "reached_threshold": 6,
+        "fraction_reached_threshold": 0.24,
+        "final_residual_min": 1.531684392830357e-05,
+        "final_residual_median": 0.0007228425820358098,
+        "final_residual_max": 0.01908867619931698,
+        "trial_reached_threshold": [
+          [
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          [
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          [
+            true,
+            true,
+            false,
+            true,
+            true
+          ],
+          [
+            false,
+            true,
+            false,
+            true,
+            false
+          ],
+          [
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        ]
+      },
+      {
+        "nu": 0.5,
+        "trials": 25,
+        "reached_threshold": 23,
+        "fraction_reached_threshold": 0.92,
+        "final_residual_min": 1.095711809284694e-06,
+        "final_residual_median": 1.619475710867846e-06,
+        "final_residual_max": 0.0003610185522120446,
+        "trial_reached_threshold": [
+          [
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          [
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          [
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          [
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          [
+            false,
+            true,
+            true,
+            true,
+            false
+          ]
+        ]
+      },
+      {
+        "nu": 1.0,
+        "trials": 25,
+        "reached_threshold": 25,
+        "fraction_reached_threshold": 1.0,
+        "final_residual_min": 1.6087843732748297e-06,
+        "final_residual_median": 2.6521065592532977e-06,
+        "final_residual_max": 9.027529813465662e-06,
+        "trial_reached_threshold": [
+          [
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          [
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          [
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          [
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          [
+            true,
+            true,
+            true,
+            true,
+            true
+          ]
+        ]
+      }
+    ],
+    "cifar10": [
+      {
+        "nu": 0.1,
+        "trials": 25,
+        "reached_threshold": 6,
+        "fraction_reached_threshold": 0.24,
+        "final_residual_min": 3.501221362967044e-05,
+        "final_residual_median": 0.002007843693718314,
+        "final_residual_max": 0.08748145401477814,
+        "trial_reached_threshold": [
+          [
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          [
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          [
+            false,
+            false,
+            true,
+            true,
+            false
+          ],
+          [
+            true,
+            true,
+            true,
+            true,
+            false
+          ],
+          [
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        ]
+      },
+      {
+        "nu": 0.5,
+        "trials": 25,
+        "reached_threshold": 20,
+        "fraction_reached_threshold": 0.8,
+        "final_residual_min": 1.0071423730551032e-06,
+        "final_residual_median": 1.6218176597249112e-06,
+        "final_residual_max": 0.36496856808662415,
+        "trial_reached_threshold": [
+          [
+            true,
+            true,
+            true,
+            true,
+            false
+          ],
+          [
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          [
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          [
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          [
+            false,
+            false,
+            false,
+            true,
+            false
+          ]
+        ]
+      },
+      {
+        "nu": 1.0,
+        "trials": 25,
+        "reached_threshold": 22,
+        "fraction_reached_threshold": 0.88,
+        "final_residual_min": 1.7841192629930447e-06,
+        "final_residual_median": 2.5533086045470554e-06,
+        "final_residual_max": 0.19931329786777496,
+        "trial_reached_threshold": [
+          [
+            true,
+            true,
+            true,
+            true,
+            false
+          ],
+          [
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          [
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          [
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          [
+            false,
+            true,
+            true,
+            true,
+            false
+          ]
+        ]
+      }
+    ]
+  },
+  "files": {
+    "arrays": "exp3_dynamics.npz",
+    "plot": "fig3_contraction.png"
+  }
+}
