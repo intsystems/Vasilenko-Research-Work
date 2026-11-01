@@ -1,328 +1,239 @@
-\documentclass[aspectratio=169, 11pt]{beamer}
-
-% SSS-Rank Minimalist Theme
+\documentclass[aspectratio=169,11pt]{beamer}
 \usetheme{default}
 \useinnertheme{circles}
-\setbeamertemplate{navigation symbols}{} % Убиваем уродливые иконки внизу
-\setbeamertemplate{footline}[frame number] % Оставляем только номера слайдов
-
-\usepackage{amsmath, amssymb, amsthm}
-\usepackage{bm}
-\usepackage{booktabs}
-\usepackage{graphicx}
-\usepackage{xcolor}
-
-% Custom Colors (Cold & Professional)
-\definecolor{miptblue}{RGB}{0, 84, 166}
-\definecolor{darkgray}{RGB}{50, 50, 50}
-\definecolor{accentred}{RGB}{200, 30, 30}
-
-% Theme coloring
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}[frame number]
+\usepackage{amsmath,amssymb,bm,booktabs,graphicx}
+\definecolor{miptblue}{RGB}{0,84,166}
 \setbeamercolor{title}{fg=miptblue}
-\setbeamercolor{frametitle}{fg=miptblue, bg=white}
+\setbeamercolor{frametitle}{fg=miptblue,bg=white}
 \setbeamercolor{itemize item}{fg=miptblue}
-\setbeamercolor{itemize subitem}{fg=miptblue}
 \setbeamercolor{enumerate item}{fg=miptblue}
 \setbeamerfont{frametitle}{series=\bfseries}
-
-% Math shortcuts
 \newcommand{\norm}[1]{\left\|#1\right\|}
-\newcommand{\JF}{J_F}
-\newcommand{\JMSA}{J_{\mathrm{MSA}}}
-\newcommand{\JFFN}{J_{\mathrm{FFN}}}
-\newcommand{\RMS}{\mathrm{RMSNorm}}
-
-\title{\LARGE \textbf{Jacobian Analysis of a Recurrent\\ Transformer Block}}
-\author{\vspace{1em} \textbf{Dmitrii Vasilenko} \and Ilia Stepanov \and Vadim Kasiuk \and \\ Gleb Karpeev \and Andrey Grabovoy}
-\institute{\vspace{0.5em} \textit{Moscow Institute of Physics and Technology}}
-\date{\vspace{1em} \textcolor{miptblue}{\textbf{AINL 2026}}}
+\newcommand{\MSA}{\operatorname{MSA}}
+\newcommand{\FFN}{\operatorname{FFN}}
+\newcommand{\TB}{\operatorname{TB}}
+\newcommand{\diag}{\operatorname{diag}}
+\title{Jacobian Analysis of a Recurrent\texorpdfstring{\\}{ }Transformer Block}
+\author{Dmitrii Vasilenko\inst{1} \and Ilia Stepanov\inst{1} \and Vadim Kasiuk\inst{1}\texorpdfstring{\\}{, }
+Gleb Karpeev\inst{1} \and Andrey Grabovoy\inst{1,2}}
+\institute{\inst{1}Moscow Institute of Physics and Technology\\
+\inst{2}V.A. Trapeznikov Institute of Control Sciences\\
+of Russian Academy of Sciences}
+\date{AINL 2026\\\small Revised November 2, 2026}
 
 \begin{document}
-
-% ---------------------------------------------------------------
 \begin{frame}[plain]
-    \titlepage
+\titlepage
 \end{frame}
 
-% ---------------------------------------------------------------
-% --- Slide 2: Context (NEW) ---
-% Сделайте акцент на том, что это не просто экономия параметров, а переход к динамическим системам.
-\begin{frame}{Background: Recurrent Transformers}
-    \begin{itemize}
-        \item \textbf{Standard Transformers:} Depth is fixed. Increasing depth = increasing parameters.
-        \item \textbf{Recurrent Transformers:} Reuse the same layer weights $T$ times.
-              % \item \textbf{Analogy:} It's like an ODE or a Discrete Dynamical System: $Y^{(t+1)} = F(Y^{(t)})$.
-        \item \textbf{The Problem:} If we loop a block, how do we ensure the activations don't explode or collapse to zero?
-    \end{itemize}
+\begin{frame}{A recurrent block is a discrete dynamical system}
+\[
+Y^{(t+1)}=F_\nu(Y^{(t)}),\qquad Y^{(t)}\in\mathbb{R}^{S\times D}.
+\]
+\begin{itemize}
+\item The same block parameters are reused at every iteration.
+\item The one-step Jacobian measures how an input perturbation changes after
+one update.
+\item We bound this Jacobian for a block containing attention, an FFN,
+residual connections, and RMSNorm.
+\end{itemize}
+\vspace{1em}
+\small
+Tomihari and Karakida (2025) give the corresponding normalization argument
+for recurrent self-attention. Here it is composed through both sub-blocks.
 \end{frame}
 
-% --- Slide 3: Motivation (Expanded) ---
-\begin{frame}{Stability and Jacobians}
-    Consider the update: $Y^{(t+1)} = F(Y^{(t)})$.
-    \vspace{1em}
-    \begin{itemize}
-        \item \textbf{Local Stability:} Determined by the spectral norm of the Jacobian $\norm{\JF(Y)}$.
-        \item If $\norm{\JF} < 1$ $\Rightarrow$ The mapping is a local contraction (stable).
-        \item If $\norm{\JF} \gg 1$ $\Rightarrow$ Small perturbations (noise) grow exponentially $\Rightarrow$ Chaos/Explosion.
-    \end{itemize}
-    \vspace{1em}
-    \textbf{Research Goal:} Find an explicit upper bound for $\norm{\JF}$ for a \textit{realistic} Transformer block (MSA + FFN + Residual + RMSNorm).
+\begin{frame}{The update under study}
+\begin{align*}
+Z_1&=Y+\MSA(Y), &Y'&=R_1(Z_1),\\
+Z_2&=Y'+\FFN(Y'), &\TB(Y)&=R_2(Z_2),\\
+\Delta(Y)&=C+\TB(Y), &U_\nu&=Y+\nu\Delta(Y),\\
+&&F_\nu(Y)&=R_U(U_\nu).
+\end{align*}
+\begin{itemize}
+\item $R_1,R_2,R_U$ are separate, row-wise normalization layers.
+\item The context $C$ is fixed during each trajectory and when computing
+$J_{F_\nu}(Y)$.
+\item In the trajectory experiment, $C=0.1Y^{(0)}$.
+\end{itemize}
 \end{frame}
 
-% --- Slide 4: Block Components (NEW) ---
-\begin{frame}{Building Blocks: MSA and FFN}
-    We analyze the standard Post-Norm configuration:
-    \vspace{1em}
-    \begin{columns}
-        \begin{column}{0.5\textwidth}
-            \textbf{Multi-Head Self-Attention:}
-            \[ A_h = \text{softmax}\left(\frac{Q_h K_h^\top}{\sqrt{d_h}}\right) \]
-            \[ \text{MSA}(Y) = [A_1 V_1 \parallel \dots \parallel A_H V_H] W_O \]
-        \end{column}
-        \begin{column}{0.5\textwidth}
-            \textbf{Feed-Forward Network:}
-            \[ \text{FFN}(Y) = \sigma(Y W_1 + b_1)W_2 + b_2 \]
-            \vspace{0.5em}
-            \textbf{RMS Normalization:}
-            \[ \RMS(y) = \text{diag}(\gamma) \frac{y}{\|y\|_2} \]
-        \end{column}
-    \end{columns}
-    \vspace{1em}
-    \textit{Note: RMSNorm is applied row-wise to the $S \times D$ state matrix.}
+\begin{frame}{RMSNorm: convention and derivative}
+For a token $y\in\mathbb{R}^D$ and layer $\ell\in\{1,2,U\}$,
+\[
+\rho_\ell(y)=\sqrt{\norm{y}_2^2/D+\epsilon_\ell},\qquad
+R_\ell(y)=\diag(\gamma_\ell)\frac{y}{\rho_\ell(y)},\quad
+\epsilon_\ell>0.
+\]
+\[
+J_{R_\ell}(y)=\frac{\diag(\gamma_\ell)}{\rho_\ell(y)}
+\left(I-\frac{yy^\top}{D\rho_\ell(y)^2}\right),\qquad
+\norm{J_{R_\ell}(y)}_2\leq\frac{g_\ell}{\rho_\ell(y)},
+\]
+where $g_\ell=\norm{\gamma_\ell}_\infty$.
+\vspace{0.5em}
+\begin{itemize}
+\item The factor decreases as the normalization input grows.
+\item It can exceed one when the input denominator is small.
+\item With $\epsilon_\ell>0$, the matrix in parentheses is not an exact projector.
+\end{itemize}
 \end{frame}
 
-% --- Slide 5: Iterative Dynamics ---
-\begin{frame}{Formulation of the Architecture}
-    The full update $F(Y)$ used in our analysis:
-    \begin{enumerate}
-        \item \textbf{MSA Sub-block:} $Y' = \RMS(Y + \text{MSA}(Y))$
-        \item \textbf{FFN Sub-block:} $\text{TB}(Y) = \RMS(Y' + \text{FFN}(Y'))$
-        \item \textbf{Global Update (with context $C=Y^{(0)}$ and step $\nu$):}
-    \end{enumerate}
-    \[ F(Y) = \RMS\Bigl(Y + \nu \bigl(C + \text{TB}(Y)\bigr)\Bigr) \]
-
-\end{frame}
-% ---------------------------------------------------------------
-% \begin{frame}{Why Study Recurrent Transformers?}
-%     \begin{columns}
-%         \begin{column}{0.55\textwidth}
-%             \textbf{Looped (Recurrent) Architectures:}
-%             \begin{itemize}
-%                 \item Reuse the same block across iterations.
-%                 \item Parameter-efficient: depth $\neq$ model size.
-%             \end{itemize}
-
-%             \vspace{1em}
-%             \textbf{Key Question:}\\
-%             Do repeated applications of $F$ converge stably, or does the gradient explode?
-%         \end{column}
-%         \begin{column}{0.45\textwidth}
-%             \textbf{Iterative Map:}
-%             \[
-%                 Y^{(t+1)} = F\!\left(Y^{(t)}\right)
-%             \]
-%             \[
-%                 F(Y) = \RMS\!\left(Y + \nu\bigl(C + \mathrm{TB}(Y)\bigr)\right)
-%             \]
-
-%             \vspace{1em}
-%             \small
-%             $\nu > 0$ — Step size coefficient\\
-%             $C = Y^{(0)}$ — External context
-%         \end{column}
-%     \end{columns}
-% \end{frame}
-
-% % ---------------------------------------------------------------
-% \begin{frame}{The Role of the Jacobian}
-%     \textbf{Why Jacobians?}
-%     \begin{itemize}
-%         \item Classical tool for local stability analysis.
-%         \item If $\norm{J_F(Y)}_2 < 1 \Rightarrow$ local contraction $\Rightarrow$ stability.
-%     \end{itemize}
-
-%     \vspace{1.5em}
-%     \textbf{Prior Work \small{(Tomihari \& Karakida, 2025)}:}
-%     \begin{itemize}
-%         \item Analyzed dynamics for \textit{self-attention only} blocks.
-%     \end{itemize}
-
-%     \vspace{1.5em}
-%     \textbf{Our Contribution:}\\
-%     We extend this framework to a full Transformer block including MSA, FFN, residual connections, and RMSNorm.
-% \end{frame}
-
-% % ---------------------------------------------------------------
-% \begin{frame}{Architecture: Post-Norm Transformer Block}
-%     \textbf{Notation:} State $Y^{(t)} \in \mathbb{R}^{S \times D}$ with sequence length $S$, hidden dimension $D$.
-
-%     \vspace{1.5em}
-%     \textbf{Sub-blocks:}
-%     \[
-%         Y' = \RMS\!\left(Y + \mathrm{MSA}(Y)\right)
-%     \]
-%     \[
-%         \mathrm{TB}(Y) = \RMS\!\left(Y' + \mathrm{FFN}(Y')\right)
-%     \]
-
-%     \vspace{1em}
-%     \textbf{Full Iterative Update:}
-%     \[
-%         Y^{(t+1)} = \RMS\!\left(Y^{(t)} + \nu\bigl(C + \mathrm{TB}(Y^{(t)})\bigr)\right)
-%     \]
-
-%     \vspace{1em}
-%     \small \textcolor{darkgray}{*Row-wise RMSNorm defined as: $\RMS(y) = \mathrm{diag}(\gamma)\,\frac{y}{\|y\|_2}$}
-% \end{frame}
-
-% --- Slide 6: The Secret Sauce (NEW) ---
-% Это важнейшая лемма из статьи. Объясните, что RMSNorm "сплющивает" градиент.
-\begin{frame}{Jacobian of RMSNorm}
-    The stability of the entire block rests on this property of RMSNorm:
-    \vspace{1em}
-
-    \textbf{Lemma (Tomihari \& Karakida, 2025):}
-
-    For $f(u) = \RMS(u)$, the Jacobian $J_f(u)$ satisfies:
-    \[ \norm{\frac{\partial \RMS(u)}{\partial u}}_2 \le \frac{\gamma_{\max}}{\|u\|_2} \]
-
-    \vspace{1em}
-    \begin{itemize}
-        \item If the input norm $\|u\|$ is large, the Jacobian becomes very small ($1/\|u\|$).
-        \item RMSNorm acts as a multiplicative damping factor.
-              % \item This is what prevents the "exploding gradient" problem in the loop.
-    \end{itemize}
+\begin{frame}{Theorem 3.1: one-step Jacobian bound}
+Use the smallest denominator across tokens at each layer:
+\[
+r_1=\min_i\rho_1((Z_1)_i),\quad
+r_2=\min_i\rho_2((Z_2)_i),\quad
+r_U=\min_i\rho_U((U_\nu)_i).
+\]
+Let $M=\norm{J_{\MSA}(Y)}_2$ and $L=\norm{J_{\FFN}(Y')}_2$. Then
+\[
+\boxed{\norm{J_{F_\nu}(Y)}_2\leq
+\frac{g_U}{r_U}\left[1+\nu\frac{g_2g_1}{r_2r_1}(1+L)(1+M)\right].}
+\]
+\vspace{1em}
+\begin{itemize}
+\item This follows from the chain rule and submultiplicativity.
+\item Component norms are evaluated at their actual inputs.
+\item An average token denominator cannot replace the minimum.
+\end{itemize}
 \end{frame}
 
-% ---------------------------------------------------------------
-\begin{frame}{Main Result: Spectral Norm Bound (Theorem 1)}
-
-    \textbf{Theorem 1.} \textit{Suppose inputs to all RMSNorm layers satisfy row-norm lower bounds:
-        \begin{itemize}
-            \item $\| (Y + \mathrm{MSA}(Y)) \| \ge r_{\mathrm{in}}$,
-            \item $\| (Y' + \mathrm{FFN}) \| \ge r_{\mathrm{out}}$,
-            \item $\| (Y + \nu (C + \mathrm{TB}(Y))) \| \ge r_{\mathrm{U}}$,
-        \end{itemize}
-        where $r_{\mathrm{in}}, r_{\mathrm{out}}, r_U > 0$.
-        Let $\gamma_{\max} = \max_j |\gamma_j|$. Then the Jacobian spectral norm is bounded by:}
-
-    \vspace{0.5em}
-    % Идеально влезающая формула без рамок
-    {\Large
-        \begin{align*}
-            \norm{J_F(Y)}_2 \;\leq\;
-            \frac{\gamma_{\max}}{r_U} \left[ 1 + \nu\,\frac{\gamma_{\max}^2}{r_{\mathrm{out}}\,r_{\mathrm{in}}}
-            \bigl(1 + \norm{\JFFN}\bigr)\bigl(1 + \norm{\JMSA}\bigr) \right]
-        \end{align*}
-    }
-
-    % \vspace{1em}
-    % \textbf{Proof Sketch:} Chain rule over the composite structure.\\
-    % $J_F = J_{\RMS} \cdot (I + \nu J_{\mathrm{TB}})$\\
-    % $J_{\mathrm{TB}} = J_{\RMS} \cdot (I + J_{\mathrm{FFN}}) \cdot J_{\RMS} \cdot (I + J_{\mathrm{MSA}})$
-
-    % \vspace{1em}
-    % $\Rightarrow$ \textbf{Takeaway:} RMSNorm acts as a multiplicative damping factor.
+\begin{frame}{Theorem 3.2: boundedness as the step grows}
+Fix $Y$, $C$, all weights, and all normalization parameters. Suppose
+\[
+\delta=\min_i\norm{\Delta(Y)_i}_2>0.
+\]
+Let $B=\max_i\norm{Y_i}_2$ and
+$K=g_2g_1(1+L)(1+M)/(r_2r_1)$. For $\nu\geq2B/\delta$,
+\[
+r_U\geq\frac{\nu\delta}{2\sqrt D},\qquad
+\norm{J_{F_\nu}(Y)}_2\leq
+\frac{2\sqrt D\,g_U}{\delta}\left(K+\frac1\nu\right)=O(1).
+\]
+\vspace{1em}
+The outer denominator grows with $\nu$ and compensates for the step multiplier.
+The result is pointwise in the fixed state and parameters.
 \end{frame}
 
-% ---------------------------------------------------------------
-\begin{frame}{Main Result: Asymptotic Stability (Theorem 2)}
-    \textbf{Theorem 2.} \textit{Under previous assumptions, and if $\min_i \norm{\Delta Y_{[i,:]}}_2 \geq \varepsilon > 0$, the Jacobian norm remains bounded even for infinitely large step sizes $\nu$:}
-
-    \[
-        \norm{J_F(Y)}_2 = O(1) \quad \text{as} \quad \nu \to \infty
-    \]
-
-    % \vspace{1.5em}
-    % \textbf{Mechanistic Intuition:}
-    % \begin{itemize}
-    %     \item As $\nu \to \infty$, the update magnitude scales linearly: $\|U\| \sim \nu\|\Delta Y\|$.
-    %     \item The RMSNorm Jacobian scales inversely: $J_{\RMS} \sim 1/\|U\| \sim 1/\nu$.
-    %     \item The $1/\nu$ damping exactly \textbf{cancels} the $\nu$ multiplier.
-    % \end{itemize}
+\begin{frame}{Bounded in step size does not mean convergent in time}
+For fixed context, derivatives through a trajectory involve a product:
+\[
+\frac{\partial Y^{(T)}}{\partial Y^{(0)}}
+=J_{F_\nu}(Y^{(T-1)})\cdots J_{F_\nu}(Y^{(0)}).
+\]
+\begin{itemize}
+\item A constant one-step bound $k>1$ allows the product bound $k^T$.
+\item Local asymptotic stability of a fixed point follows from spectral radius
+less than one; a norm below one is a stronger sufficient condition.
+\item A large one-step singular value alone does not prove chaos or exponential
+growth along a trajectory.
+\end{itemize}
+\vspace{0.5em}
+For example, $x\mapsto-x$ on a sphere has bounded derivative and period-two
+orbits. This illustrates why a bounded norm is insufficient.
 \end{frame}
 
-% --- Slide 10: Experiment 1 ---
-\begin{frame}{Experimental Setup}
-    \begin{itemize}
-        \item \textbf{Task:} Verify if the theoretical bound is tight and if $O(1)$ holds.
-        \item \textbf{Configurations:} $S=32, D=64, H=4, D_{ff}=128$.
-        \item \textbf{Data:} Synthetic Gaussian inputs and CIFAR-10 embeddings.
-              % \item \textbf{Method:} Spectral norms computed via \textbf{Power Iteration} (iterative $v \leftarrow Jv / \|Jv\|$).
-    \end{itemize}
+\begin{frame}{Experimental protocol}
+All blocks and image projections are untrained. Normalization scales start at
+one and $\epsilon=10^{-8}$.
+\vspace{1em}
+\begin{center}
+\begin{tabular}{lcccc}
+\toprule
+Experiment & $S$ & $D$ & $H$ & $D_{\rm ff}$\\
+\midrule
+One-step bound & 16 & 32 & 4 & 64\\
+Large-step sweep & 16 & 32 & 4 & 64\\
+Trajectories & 32 & 64 & 4 & 128\\
+\bottomrule
+\end{tabular}
+\end{center}
+\begin{itemize}
+\item Experiments 1 and 2: dense autograd Jacobians and SVD, float64.
+\item Weights, state, and context are fixed within each step-size sweep.
+\item Trajectories: 1000 steps, $\nu\in\{0.1,0.5,1.0\}$;
+25 trials per dataset and step size.
+\end{itemize}
 \end{frame}
 
-% ---------------------------------------------------------------
-\begin{frame}{Experiment 1: Validating Theoretical Bounds}
-    \begin{figure}
-        \centering
-        \includegraphics[width=0.73\textwidth]{old_plots_for_conference/fig1_bounds_validation.png}
-        % \caption{Empirical $\|J_F\|_2$ vs Theoretical Bound}
-
-        The bound is conservative but tracks the trend of the Jacobian as $\nu$ increases.
-    \end{figure}
+\begin{frame}{Experiment 1: check the composed bound}
+\begin{center}
+\includegraphics[width=0.72\textwidth,height=0.69\textheight,keepaspectratio]{../plots/fig1_bounds_validation.png}
+\end{center}
+\small
+Seed 42; ten step sizes in $[0.1,2.0]$. Both component Jacobian norms and all
+three token minima enter the bound.
 \end{frame}
 
-% ---------------------------------------------------------------
-
-\begin{frame}{Experiment 2: Validating Asymptotic Stability}
-    \begin{figure}
-        \centering
-        \includegraphics[width=0.73\textwidth]{old_plots_for_conference/fig2_asymptotic.png}
-        % \caption{Asymptotic Stability as $\nu \rightarrow \infty$}
-
-        RMSNorm makes the architecture immune to gradient explosion from large step sizes.
-    \end{figure}
+\begin{frame}{Experiment 2: compare fixed-model sweeps}
+\begin{center}
+\includegraphics[width=0.72\textwidth,height=0.69\textheight,keepaspectratio]{../plots/fig2_asymptotic.png}
+\end{center}
+\small
+Twenty step sizes from $10^{-1}$ to $10^5$; seeds 0--9. Shading is one
+standard deviation across seeds. At $\nu=10^5$, the mean norm is $3.720649$;
+the independently computed limiting mean is $3.720655$.
 \end{frame}
 
-% ---------------------------------------------------------------
-\begin{frame}{Experiment 3: Contraction on Embeddings}
-    \begin{figure}
-        \centering
-        \includegraphics[width=1\textwidth]{old_plots_for_conference/fig3_contraction.png}
-        % \caption{Contraction dynamics on synthetic data and real embeddings.}
-
-        Convergence is fast for both synthetic data and real CIFAR-10 embeddings.
-
-    \end{figure}
+\begin{frame}{Experiment 3: measure successive-state differences}
+\begin{center}
+\includegraphics[width=0.94\textwidth,height=0.68\textheight,keepaspectratio]{../plots/fig3_contraction.png}
+\end{center}
+\small
+Seeds 0--4; five Gaussian inputs and CIFAR-10 test images 0--4 per seed.
+Curves show medians; bands span the observed minimum and maximum.
 \end{frame}
 
-% ---------------------------------------------------------------
-\begin{frame}{Conclusion \& Future Work}
-    \begin{columns}
-        \begin{column}{0.5\textwidth}
-            \textbf{Contributions:}
-            \begin{itemize}
-                \item Jacobian analysis of a full Transformer block.
-                \item Explicit spectral bounds derived.
-                \item Proved $O(1)$ stability for large $\nu$.
-            \end{itemize}
-        \end{column}
-        \begin{column}{0.5\textwidth}
-            \textbf{Future Directions:}
-            \begin{itemize}
-                \item Tightening the spectral bounds.
-                \item Extension to Pre-Norm architectures.
-                      % \item Link local Jacobian stability to global Deep Equilibrium limits.
-            \end{itemize}
-        \end{column}
-    \end{columns}
+\begin{frame}{Interpreting the trajectory experiment}
+The criterion is $d_t=\norm{Y^{(t+1)}-Y^{(t)}}_F\leq10^{-4}$
+throughout the final 20 of 1000 steps.
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+Input & $\nu=0.1$ & $\nu=0.5$ & $\nu=1.0$\\
+\midrule
+Gaussian & 6/25 & 23/25 & 25/25\\
+CIFAR-10 & 6/25 & 20/25 & 22/25\\
+\bottomrule
+\end{tabular}
+\end{center}
+\begin{itemize}
+\item The counts increase with $\nu$ in this sample; this is not a general guarantee.
+\item Missing the threshold by step 1000 does not prove non-convergence.
+\item The residual measures progress toward a fixed point on one trajectory,
+not contraction between different initial states.
+\end{itemize}
 \end{frame}
 
-% ---------------------------------------------------------------
-\begin{frame}[plain]
-    \centering
-    \vspace{3em}
-    {\Huge \textcolor{miptblue}{\textbf{Thank you!}}}
-
-    \vspace{2em}
-    {\large \textbf{Paper, Slides \& Code:}} \\
-    \vspace{0.5em}
-    {\normalsize \href{https://github.com/Dimundel/Jacobian-Analysis-of-a-Recurrent-Transformer-Block}{Click here}}
-
-    \vspace{2em}
-    \small \textcolor{darkgray}{Dmitrii Vasilenko} \\
-    \texttt{vasilenko.dmitrii@phystech.edu}
+\begin{frame}{What the analysis establishes}
+\begin{itemize}
+\item An explicit bound for the one-step Jacobian of the complete update.
+\item Separate contributions from attention, FFN, and each normalization layer.
+\item A bounded large-step limit at fixed state and parameters when every
+update row is nonzero.
+\end{itemize}
+\vspace{1em}
+Contraction and gradient control over many recurrent steps require additional
+conditions. They are not consequences of the large-step bound alone.
 \end{frame}
 
+\begin{frame}{References and materials}
+\small
+A.~Tomihari and R.~Karakida (2025).
+\emph{Recurrent Self-Attention Dynamics: An Energy-Agnostic Perspective from
+Jacobians}. arXiv:2505.19458v3. Proposition 5.1 and Lemma A.3.
+\vspace{1em}
+
+B.~Zhang and R.~Sennrich (2019).
+\emph{Root Mean Square Layer Normalization}. NeurIPS 32.
+\vspace{1.5em}
+
+\href{https://github.com/Dimundel/Jacobian-Analysis-of-a-Recurrent-Transformer-Block}{Code, revised manuscript, and numerical records}
+\vspace{1em}
+
+\texttt{vasilenko.dmitrii@phystech.edu}
+\end{frame}
 \end{document}
