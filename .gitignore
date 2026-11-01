@@ -13,6 +13,8 @@ wheels/
 
 # LaTeX build files
 *.aux
+*.bbl
+*.blg
 *.log
 *.out
 *.toc
