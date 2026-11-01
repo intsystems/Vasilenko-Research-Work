@@ -1,5 +1,5 @@
 import os
-import warnings
+import math
 import matplotlib.pyplot as plt
 import numpy as np
 from torch.autograd.functional import jacobian
@@ -30,57 +30,74 @@ def setup_experiment(seed=42, save_dir="plots"):
     return save_dir
 
 
-def compute_jacobian_spectral_norm(model, Y, C):
-    """Computes ||J_F(Y)||_2 via autograd"""
-    Y_flat = Y.detach().clone().requires_grad_(True)
+def jacobian_spectral_norm(function, x):
+    """Compute the spectral norm of the full, flattened Jacobian via SVD.
 
-    def func(y_flat):
-        y_reshaped = y_flat.view(Y.shape)
-        out = model.forward_step(y_reshaped, C)
-        return out.view(-1)
-
-    J = jacobian(func, Y_flat.view(-1))
-
-    try:
-        norm = torch.linalg.matrix_norm(J, ord=2).item()
-    except RuntimeError as e:
-        warnings.warn(
-            f"SVD failed to converge during Jacobian norm computation. Returning NaN. Details: {e}"
-        )
-        norm = float("nan")
-
-    return norm
-
-
-def compute_theoretical_bound(model, Y, C, M=1.0, F=1.0):
+    This forms a dense matrix and is intended for small diagnostic problems.
+    Autograd and SVD errors propagate to the caller rather than dropping samples.
     """
-    Computes the bound from Theorem 3.1.
-    Note: We use M=1, F=1 as conservative Lipschitz estimates for MSA/FFN layers
-    initialized with standard scaling.
+    def flattened_function(x_flat):
+        return function(x_flat.reshape(x.shape)).reshape(-1)
+
+    J = jacobian(flattened_function, x.detach().reshape(-1))
+    if not torch.isfinite(J).all():
+        raise ValueError("Jacobian contains non-finite values")
+    return torch.linalg.matrix_norm(J, ord=2).item()
+
+
+def compute_jacobian_spectral_norm(model, Y, C):
+    """Compute ||J_F(Y)||_2 with the context C held fixed."""
+    return jacobian_spectral_norm(lambda y: model.forward_step(y, C), Y)
+
+
+def compute_component_jacobian_norms(model, Y):
+    """Return (||J_MSA(Y)||_2, ||J_FFN(Y_prime)||_2)."""
+    M = jacobian_spectral_norm(lambda y: model.msa(y, y, y)[0], Y)
+    with torch.no_grad():
+        attention, _ = model.msa(Y, Y, Y)
+        Y_prime = model.rms1(Y + attention)
+    F = jacobian_spectral_norm(model.ffn, Y_prime)
+    return M, F
+
+
+def compute_theoretical_bound(model, Y, C, M=None, F=None):
+    """Evaluate the composed bound for the RMSNorm used by the model.
+
+    Denominators are minimum row RMS values, including each layer's epsilon.
+    M and F may be supplied as component norms or valid upper bounds; missing
+    values are measured at Y and Y_prime, respectively, using dense Jacobians.
     """
     with torch.no_grad():
-        TB_Y = model.forward_subblocks(Y)
-
-        attn_out, _ = model.msa(Y, Y, Y)
-        input_rms1 = Y + attn_out
-        r_in = torch.sqrt(torch.mean(input_rms1**2, dim=-1)).mean().item()
-
+        attention, _ = model.msa(Y, Y, Y)
+        input_rms1 = Y + attention
         Y_prime = model.rms1(input_rms1)
-        ffn_out = model.ffn(Y_prime)
-        input_rms2 = Y_prime + ffn_out
-        r_out = torch.sqrt(torch.mean(input_rms2**2, dim=-1)).mean().item()
-
+        input_rms2 = Y_prime + model.ffn(Y_prime)
+        TB_Y = model.rms2(input_rms2)
         U = Y + model.nu * (C + TB_Y)
-        r_U = torch.sqrt(torch.mean(U**2, dim=-1)).mean().item()
 
-        gamma_max = model.rms_final.get_gamma_max()
+        r_in = torch.sqrt(
+            input_rms1.square().mean(dim=-1) + model.rms1.eps
+        ).amin().item()
+        r_out = torch.sqrt(
+            input_rms2.square().mean(dim=-1) + model.rms2.eps
+        ).amin().item()
+        r_U = torch.sqrt(
+            U.square().mean(dim=-1) + model.rms_final.eps
+        ).amin().item()
 
-        eps = 1e-6
-        bound = (gamma_max / (r_U + eps)) * (
-            1
-            + model.nu
-            * (gamma_max**2 / ((r_out + eps) * (r_in + eps)))
-            * (1 + F)
-            * (1 + M)
-        )
-        return bound
+    if any(not math.isfinite(r) or r <= 0 for r in (r_in, r_out, r_U)):
+        raise ValueError("RMSNorm denominators must be finite and positive")
+
+    if M is None:
+        M = jacobian_spectral_norm(lambda y: model.msa(y, y, y)[0], Y)
+    if F is None:
+        F = jacobian_spectral_norm(model.ffn, Y_prime)
+    if any(not math.isfinite(n) or n < 0 for n in (M, F)):
+        raise ValueError("Component Jacobian norms must be finite and nonnegative")
+
+    g_in = model.rms1.get_gamma_max()
+    g_out = model.rms2.get_gamma_max()
+    g_U = model.rms_final.get_gamma_max()
+    return (g_U / r_U) * (
+        1 + abs(model.nu) * (g_out * g_in / (r_out * r_in)) * (1 + F) * (1 + M)
+    )

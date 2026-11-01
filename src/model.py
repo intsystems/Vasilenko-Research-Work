@@ -3,6 +3,8 @@ import torch.nn as nn
 
 
 class RMSNorm(nn.Module):
+    """Row-wise gamma * x / sqrt(mean(x**2) + eps)."""
+
     def __init__(self, dim: int, eps: float = 1e-8, gamma: float = 1.0):
         super().__init__()
         self.eps = eps
@@ -60,5 +62,5 @@ class IterativeTransformerBlock(nn.Module):
 
         TB_Y = self.forward_subblocks(Y)
         U = Y + self.nu * (C + TB_Y)
-        Y_next = self.rms_final(U)  # Eq 3.15
+        Y_next = self.rms_final(U)
         return Y_next
